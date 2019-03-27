@@ -1,0 +1,19 @@
+name: BlockCommand
+main: BlockCommand\BlockCommand
+version: B1
+author: Sanea
+api:
+- 4.0.0
+- 3.6.1
+- 3.0.0
+
+commands:
+ 블럭커맨드:
+  description: Blockcommands
+  permission: Block.user.command
+
+permissions:
+ Block.user.command:
+  description: "USER"
+  default: true
+
