@@ -22,7 +22,6 @@ use pocketmine\utils\TextFormat;
 use pocketmine\level\particle\FloatingTextParticle;
 // math
 use pocketmine\math\Vector3;
-use pocketmine\scheduler\Task;
 
 // 한글깨짐방지
 class BlockCommand extends PluginBase implements Listener {
@@ -32,22 +31,22 @@ class BlockCommand extends PluginBase implements Listener {
 		$this->pldb = $this->player->getAll ();
 		$this->block = new Config ( $this->getDataFolder () . "Block.yml", Config::YAML );
 		$this->blockdb = $this->block->getAll ();
-		$this->getScheduler ()->scheduleRepeatingTask ( new BlockCommandTask ( $this, $this->player ), 160 );
 		$this->getServer ()->getPluginManager ()->registerEvents ( $this, $this );
 	}
-	public function BlockCommandTaskEvent(Player $player) {
+	public function BlockCommandEvent(Player $player) {
 		foreach ( $this->blockdb as $tg => $args ) {
 			$tg = explode ( ':', $tg );
 			$x = $tg [0];
 			$y = $tg [1];
 			$z = $tg [2];
 			$level = $tg [3];
-			$player->getLevel ()->addParticle ( new FloatingTextParticle ( new Vector3 ( $x + 0.5, $y - 0.2, $z + 0.5, $level ), '', "§l§e[ §f블럭커맨드 §e]§f" . "§f\n" . $this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] ["블럭이름"] . "\n§e[ §f터치시 명령어 실행 §e]" ) );
+			$player->getLevel ()->addParticle ( new FloatingTextParticle ( new Vector3 ( $x + 0.5, $y - 0.2, $z + 0.5, $level ), '', "§l§e[ §f블럭커맨드 §e]§f" . "§f\n" . $this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] ["블럭이름"] . "\n§e[ §f터치시 명령어 실행 §e]" ), [$player] );
 		}
 	}
 	public function OnJoin(PlayerJoinEvent $event) {
 		$player = $event->getPlayer ();
 		$name = $player->getName ();
+		$this->BlockCommandEvent ($player);
 		if ($player->isOp ()) {
 			if (! isset ( $this->pldb [strtolower ( $name )] )) {
 				$this->pldb [strtolower ( $name )] ["블럭설치"] = "준비중";
@@ -160,7 +159,7 @@ class BlockCommand extends PluginBase implements Listener {
 			}
 		}
 	}
-	public function Interact(PlayerInteractEvent $event) {
+	public function IntCommand(PlayerInteractEvent $event) {
 		$player = $event->getPlayer ();
 		$name = $player->getName ();
 		$tag = "§l§e[ §f블럭커맨드 §e]§f";
@@ -169,26 +168,28 @@ class BlockCommand extends PluginBase implements Listener {
 		$y = $block->y;
 		$z = $block->z;
 		$level = $block->getLevel ()->getFolderName ();
-		if ( isset ( $this->pldb [strtolower ( $name )] )) {
-			if ($this->pldb [strtolower ( $name )] ["블럭제거모드"] == "실행중") {
-				if (isset ( $this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] )) {
-					$player->sendMessage ( $tag . " 해당위치의 블럭커맨드를 제거 했습니다." );
-					$player->sendMessage ( $tag . " 재접속시에 팝업이 제거됩니다." );
-					unset ( $this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] );
+		if ($player->isOp ()) {
+			if ( isset ( $this->pldb [strtolower ( $name )] )) {
+				if ( $this->pldb [strtolower ( $name )] ["블럭제거모드"] == "실행중" ) {
+					if ( isset ( $this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] )) {
+						$player->sendMessage ( $tag . " 해당위치의 블럭커맨드를 제거 했습니다." );
+						$player->sendMessage ( $tag . " 재접속시에 팝업이 제거됩니다." );
+						unset ( $this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] );
+						$this->save ();
+						return true;
+					}
+				}
+				if ( $this->pldb [strtolower ( $name )] ["블럭설치"] == "진행중") {
+					$player->sendMessage ( $tag . " 해당위치의 블럭커맨드를 생성 했습니다." );
+					$this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] ["블럭이름"] = $this->pldb [strtolower ( $name )] ["블럭이름"];
+					$this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] ["블럭커맨드"] = $this->pldb [strtolower ( $name )] ["블럭커맨드"];
+					$this->BlockCommandEvent ( $player );
+					$this->pldb [strtolower ( $name )] ["블럭설치"] = "준비중";
+					$this->pldb [strtolower ( $name )] ["블럭이름"] = "없음";
+					$this->pldb [strtolower ( $name )] ["블럭커맨드"] = "없음";
 					$this->save ();
 					return true;
 				}
-			}
-			if ($this->pldb [strtolower ( $name )] ["블럭설치"] == "진행중") {
-				$player->sendMessage ( $tag . " 해당위치의 블럭커맨드를 생성 했습니다." );
-				$this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] ["블럭이름"] = $this->pldb [strtolower ( $name )] ["블럭이름"];
-				$this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] ["블럭커맨드"] = $this->pldb [strtolower ( $name )] ["블럭커맨드"];
-				$player->getLevel ()->addParticle ( new FloatingTextParticle ( new Vector3 ( $x + 0.5, $y - 0.2, $z + 0.5, $level ), '', "§l§e[ §f블럭커맨드 §e]§f" . "§f\n" . $this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] ["블럭이름"] . "\n§e[ §f터치시 명령어 실행 §e]" ) );
-				$this->pldb [strtolower ( $name )] ["블럭설치"] = "준비중";
-				$this->pldb [strtolower ( $name )] ["블럭이름"] = "없음";
-				$this->pldb [strtolower ( $name )] ["블럭커맨드"] = "없음";
-				$this->save ();
-				return true;
 			}
 		}
 		if (isset ( $this->blockdb [$x . ':' . $y . ':' . $z . ':' . $level] )) {
@@ -198,8 +199,13 @@ class BlockCommand extends PluginBase implements Listener {
 		}
 	}
 	public function onCommand(CommandSender $sender, Command $cmd, string $label, array $args): bool {
+		$tag = "§l§c[ §f경고 §c]§f";
 		if ($cmd->getName () === '블럭커맨드') {
-			$this->MainUI ( $sender );
+			if ($sender->isOp ()) {
+				$this->MainUI ( $sender );
+			} else {
+			  	$sender->sendMessage ( $tag . "권한이 없어 이용하지 못합니다." );
+			}
 		}
 		return true;
 	}
@@ -211,20 +217,5 @@ class BlockCommand extends PluginBase implements Listener {
 		$this->player->save ();
 		$this->block->setAll ( $this->blockdb );
 		$this->block->save ();
-	}
-}
-class BlockCommandTask extends Task {
-	protected $owner;
-	protected $player;
-	protected $pldb;
-	public function __construct(BlockCommand $owner, Config $player) {
-		$this->owner = $owner;
-		$this->player = $player;
-		$this->pldb = $this->player->getAll ();
-	}
-	public function onRun(int $currentTick) {
-		foreach ( $this->owner->getServer ()->getOnlinePlayers () as $player ) {
-			$this->owner->BlockCommandTaskEvent ( $player );
-		}
 	}
 }
